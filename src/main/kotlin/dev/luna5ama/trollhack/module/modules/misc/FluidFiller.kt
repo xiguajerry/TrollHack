@@ -20,24 +20,29 @@ import dev.luna5ama.trollhack.util.math.vector.distanceToCenter
 import dev.luna5ama.trollhack.util.threads.runSynchronized
 import dev.luna5ama.trollhack.util.world.*
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap
+import net.minecraft.block.Block
 import net.minecraft.block.BlockLiquid
 import net.minecraft.init.Blocks
 import net.minecraft.network.play.client.CPacketPlayerDigging
 import net.minecraft.util.EnumFacing
 import net.minecraft.util.math.BlockPos
 
-internal object LavaFiller : Module(
-    name = "Lava Filler",
+internal object FluidFiller : Module(
+    name = "Fluid Filler",
     description = "Fills up lava with netherack",
     category = Category.MISC,
     modulePriority = 100
 ) {
+    private val lava by setting("Lava", true)
+    private val water by setting("Water", true)
     private val placeDelay by setting("Place Delay", 200, 0..1000, 10)
     private val mineDelay by setting("Mine Delay", 100, 0..1000, 10)
     private val cleanDelay by setting("Clean Delay", 3000, 0..10000, 100)
     private val placeTimeout by setting("Place Timeout", 1000, 0..10000, 100)
     private val mineTimeout by setting("Mine Timeout", 1000, 0..10000, 100)
     private val range by setting("Range", 4.0f, 1.0f..8.0f, 0.1f)
+    var block0 by setting("Block", Blocks.OBSIDIAN.registryName.toString())
+    private val block get() = Block.getBlockFromName(block0) ?: Blocks.OBSIDIAN
 
     private val placeTimer = TickTimer()
     private val mineTimer = TickTimer()
@@ -57,7 +62,7 @@ internal object LavaFiller : Module(
         safeListener<WorldEvent.ClientBlockUpdate> {
             if (it.newState.block == Blocks.AIR) {
                 placeTimeoutMap.remove(it.pos.toLong())
-            } else if (it.newState.block == Blocks.NETHERRACK) {
+            } else if (it.newState.block == block) {
                 val time = placeTimeoutMap.remove(it.pos.toLong())
                 if (time != 0L) {
                     mineTimeoutMap.put(it.pos.toLong(), System.currentTimeMillis() + cleanDelay)
@@ -73,7 +78,7 @@ internal object LavaFiller : Module(
 
     private fun SafeClientEvent.mine() {
         if (!mineTimer.tickAndReset(mineDelay)) return
-        val toolSlot = findBestTool(Blocks.NETHERRACK.defaultState) ?: return
+        val toolSlot = findBestTool(block.defaultState) ?: return
 
         val currentTime = System.currentTimeMillis()
         mineTimeoutMap.runSynchronized {
@@ -84,7 +89,7 @@ internal object LavaFiller : Module(
 
         val pos = VectorUtils.getBlockPosInSphere(player, range)
             .filterNot { mineTimeoutMap.containsKey(it.toLong()) }
-            .filter { world.getBlock(it) == Blocks.NETHERRACK }
+            .filter { world.getBlock(it) == Blocks.OBSIDIAN }
             .minByOrNull { player.distanceSqToCenter(it) } ?: return
 
         mineTimeoutMap.put(pos.toLong(), currentTime + mineTimeout)
@@ -100,7 +105,7 @@ internal object LavaFiller : Module(
     private fun SafeClientEvent.place() {
         if (!placeTimer.tickAndReset(placeDelay)) return
 
-        val fillSlot = player.allSlotsPrioritized.firstBlock(Blocks.NETHERRACK) ?: return
+        val fillSlot = player.allSlotsPrioritized.firstBlock(block) ?: return
         val currentTime = System.currentTimeMillis()
         placeTimeoutMap.runSynchronized {
             values.removeBy {
@@ -114,7 +119,8 @@ internal object LavaFiller : Module(
             }
             .filter {
                 val blockState = world.getBlockState(it)
-                blockState.block == Blocks.LAVA && blockState.getValue(BlockLiquid.LEVEL) == 0
+                ((lava && blockState.block == Blocks.LAVA) || (water && blockState.block == Blocks.WATER))
+                        && blockState.getValue(BlockLiquid.LEVEL) == 0
             }
             .maxWithOrNull(
                 compareBy<BlockPos> {
