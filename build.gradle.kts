@@ -142,7 +142,8 @@ allprojects {
                     "-opt-in=kotlin.contracts.ExperimentalContracts",
                     "-Xlambdas=indy",
                     "-Xjvm-default=all",
-                    "-Xbackend-threads=0"
+                    "-Xbackend-threads=0",
+                    "-Xcontext-receivers"
                 )
             }
         }
