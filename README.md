@@ -8,6 +8,8 @@
 # TrollHack
 Strong hack for Minecraft anarchy servers.
 
+This repo contains a modified version of TrollHack. Thanks to author Luna.
+
 Discord server link: https://discord.gg/RFd2ugHC2S
 
 # System Requirements
